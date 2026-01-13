@@ -1,0 +1,274 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum WorkType {
+  INSTALLATION   // Instalare
+  UNINSTALLATION // Dezinstalare
+  MODIFICATION   // Modificare
+}
+
+enum WorkReportStatus {
+  DRAFT    // Proces verbal în lucru
+  BILLED   // Proces verbal facturat (imutabil)
+  CANCELLED // Proces verbal anulat
+}
+
+enum ScaffoldStatus {
+  AVAILABLE  // Disponibil
+  IN_USE     // În utilizare
+  MAINTENANCE // În întreținere
+  DAMAGED    // Deteriorat
+}
+
+enum ComponentStatus {
+  AVAILABLE  // Disponibil
+  IN_USE     // În utilizare
+  MAINTENANCE // În întreținere
+  DAMAGED    // Deteriorat
+}
+
+enum UnitOfMeasure {
+  METER      // Metru
+  KILOGRAM   // Kilogram
+  PIECE      // Bucată
+  SQUARE_METER // Metru pătrat
+}
+
+enum ProformaInvoiceStatus {
+  DRAFT    // Proformă în lucru
+  SENT     // Proformă trimisă
+  PAID     // Proformă plătită
+  CANCELLED // Proformă anulată
+}
+
+enum UserRole {
+  ADMIN     // Administrator
+  OPERATOR  // Operator
+  ACCOUNTING // Contabil
+  CLIENT    // Client
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      UserRole // Rol utilizator în sistem
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime? // Soft delete
+
+  @@map("users")
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  name        String   // Nume client/beneficiar
+  code        String?  @unique // Cod client (opțional, unic)
+  taxId       String?  // CUI/CIF
+  address     String?
+  phone       String?
+  email       String?
+  notes       String?  // Note despre client
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // Soft delete
+
+  // Relații
+  contracts   Contract[]
+  projects    Project[]
+  workReports WorkReport[]
+  proformaInvoices ProformaInvoice[]
+
+  @@map("clients")
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  number      String   @unique // Număr contract
+  clientId    String   // Clientul cu care s-a încheiat contractul
+  startDate   DateTime?
+  endDate     DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // Soft delete
+
+  // Relații
+  client      Client   @relation(fields: [clientId], references: [id])
+
+  @@map("contracts")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String   // Nume proiect
+  code        String?  @unique // Cod proiect (opțional, unic)
+  clientId    String   // Clientul beneficiar al proiectului
+  location    String?  // Locația proiectului
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // Soft delete
+
+  // Relații
+  client              Client                  @relation(fields: [clientId], references: [id])
+  workReports         WorkReport[]
+  componentPricings   ProjectComponentPricing[]
+
+  @@map("projects")
+}
+
+model Scaffold {
+  id          String   @id @default(cuid())
+  number      String   @unique // Număr unic al schelei
+  status      ScaffoldStatus @default(AVAILABLE)
+  currentProjectId String? // Proiectul în care se află în prezent
+  location    String?  // Locația curentă
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // Soft delete
+
+  @@map("scaffolds")
+}
+
+model ScaffoldComponent {
+  id              String   @id @default(cuid())
+  code            String?  @unique // Cod componentă
+  name            String   // Nume componentă (ex: "Țeavă 2m", "Placă", etc.)
+  type            String?  // Tip componentă
+  status          ComponentStatus @default(AVAILABLE)
+  totalStock      Decimal  @default(0) @db.Decimal(10, 2) // Stoc total (MVP - tracking de bază)
+  availableStock  Decimal  @default(0) @db.Decimal(10, 2) // Stoc disponibil (MVP - tracking de bază)
+  currentProjectId String? // Proiectul în care se află în prezent
+  location        String?  // Locația curentă
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime? // Soft delete
+
+  // Relații
+  projectPricings  ProjectComponentPricing[]
+  workReportItems  WorkReportItem[]
+
+  @@map("scaffold_components")
+}
+
+model ProjectComponentPricing {
+  id                  String   @id @default(cuid())
+  projectId           String   // Proiectul pentru care se definește prețul
+  scaffoldComponentId String   // Componenta pentru care se definește prețul
+  price               Decimal  @db.Decimal(10, 2) // Preț per unitate
+  unitOfMeasure       UnitOfMeasure // Unitatea de măsură pentru preț
+  validFrom           DateTime @default(now()) // Data de la care prețul este valabil
+  validTo              DateTime? // Data până la care prețul este valabil (null = nelimitat)
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  deletedAt           DateTime? // Soft delete
+
+  // Relații
+  project             Project          @relation(fields: [projectId], references: [id])
+  scaffoldComponent   ScaffoldComponent @relation(fields: [scaffoldComponentId], references: [id])
+
+  // Prețurile sunt definite pe proiect + componentă (unicitate)
+  @@unique([projectId, scaffoldComponentId, validFrom])
+  @@map("project_component_pricings")
+}
+
+model WorkReport {
+  id          String   @id @default(cuid())
+  number      String   @unique // Număr proces verbal
+  clientId    String   // Clientul beneficiar al procesului verbal
+  projectId   String   // Proiectul pentru care se întocmește procesul verbal
+  workType    WorkType // Tip lucrare: instalare, dezinstalare, modificare
+  status      WorkReportStatus @default(DRAFT) // Status proces verbal
+  reportDate  DateTime @default(now()) // Data procesului verbal
+  location    String?  // Locația lucrării (poate diferi de locația proiectului)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // Soft delete
+
+  // Relații
+  client              Client                @relation(fields: [clientId], references: [id])
+  project             Project                @relation(fields: [projectId], references: [id])
+  items               WorkReportItem[]
+  proformaInvoiceItems ProformaInvoiceItem[]
+
+  // Procesul verbal este baza de facturare
+  // Procesele verbale facturate (status = BILLED) NU pot fi modificate
+  @@map("work_reports")
+}
+
+model WorkReportItem {
+  id                  String   @id @default(cuid())
+  workReportId        String   // Procesul verbal căruia îi aparține linia
+  scaffoldComponentId String   // Componenta utilizată
+  quantity            Decimal  @db.Decimal(10, 2) // Cantitate
+  length              Decimal? @db.Decimal(10, 2) // Lungime (dacă aplicabil)
+  weight              Decimal? @db.Decimal(10, 2) // Greutate (dacă aplicabil)
+  unitOfMeasure       UnitOfMeasure // Unitatea de măsură
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relații
+  workReport          WorkReport          @relation(fields: [workReportId], references: [id], onDelete: Cascade)
+  scaffoldComponent   ScaffoldComponent   @relation(fields: [scaffoldComponentId], references: [id])
+
+  @@map("work_report_items")
+}
+
+model ProformaInvoice {
+  id          String   @id @default(cuid())
+  number      String   @unique // Număr proformă
+  clientId    String   // Clientul pentru care se emite proforma
+  status      ProformaInvoiceStatus @default(DRAFT)
+  issueDate   DateTime @default(now()) // Data emiterii
+  dueDate     DateTime? // Data scadenței
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime? // Soft delete
+
+  // Relații
+  client              Client              @relation(fields: [clientId], references: [id])
+  items               ProformaInvoiceItem[]
+
+  // O proformă poate include mai multe procese verbale ale aceluiași client
+  @@map("proforma_invoices")
+}
+
+model ProformaInvoiceItem {
+  id                String   @id @default(cuid())
+  proformaInvoiceId String   // Proforma căreia îi aparține linia
+  workReportId      String   @unique // Procesul verbal inclus în proformă (unic - un proces verbal nu poate fi în mai multe proforme)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relații
+  proformaInvoice   ProformaInvoice @relation(fields: [proformaInvoiceId], references: [id], onDelete: Cascade)
+  workReport        WorkReport      @relation(fields: [workReportId], references: [id])
+
+  // Un proces verbal poate apărea doar într-o singură proformă
+  @@map("proforma_invoice_items")
+}
