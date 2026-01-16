@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,52 +14,93 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/api";
 
-// DEMO MODE – Mock data for client demo
-const clients: Array<{
+interface Client {
   id: string;
   name: string;
-  cui: string;
-  email: string;
-  status: string;
-}> = [
-  {
-    id: "1",
-    name: "Constructii ABC SRL",
-    cui: "RO12345678",
-    email: "contact@abc-constructii.ro",
-    status: "Activ",
-  },
-  {
-    id: "2",
-    name: "Proiecte XYZ SA",
-    cui: "RO87654321",
-    email: "office@xyz-proiecte.ro",
-    status: "Activ",
-  },
-  {
-    id: "3",
-    name: "Dezvoltare Imobiliara SRL",
-    cui: "RO11223344",
-    email: "info@dezvoltare-imob.ro",
-    status: "Activ",
-  },
-];
+  taxId?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+}
 
 export default function ClientsPage() {
+  const [clients, setClients] = useState<Client[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
-    cui: "",
+    taxId: "",
     address: "",
     notes: "",
   });
   const { toast } = useToast();
-  const hasClients = clients.length > 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchClients = async () => {
+    try {
+      setLoading(true);
+      const data = await apiRequest<Client[]>("/clients");
+      setClients(data);
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "Nu s-au putut încărca clienții",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenDialog = (client?: Client) => {
+    if (client) {
+      setEditingClient(client);
+      setFormData({
+        name: client.name || "",
+        email: client.email || "",
+        phone: client.phone || "",
+        taxId: client.taxId || "",
+        address: client.address || "",
+        notes: client.notes || "",
+      });
+    } else {
+      setEditingClient(null);
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        taxId: "",
+        address: "",
+        notes: "",
+      });
+    }
+    setIsOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsOpen(false);
+    setEditingClient(null);
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      taxId: "",
+      address: "",
+      notes: "",
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast({
@@ -69,19 +110,62 @@ export default function ClientsPage() {
       });
       return;
     }
-    toast({
-      title: "Demo Mode",
-      description: "Datele nu sunt salvate. Aceasta este o demonstrație.",
-    });
-    setIsOpen(false);
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      cui: "",
-      address: "",
-      notes: "",
-    });
+
+    try {
+      setSubmitting(true);
+      if (editingClient) {
+        await apiRequest(`/clients/${editingClient.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(formData),
+        });
+        toast({
+          title: "Succes",
+          description: "Clientul a fost actualizat cu succes",
+        });
+      } else {
+        await apiRequest("/clients", {
+          method: "POST",
+          body: JSON.stringify(formData),
+        });
+        toast({
+          title: "Succes",
+          description: "Clientul a fost adăugat cu succes",
+        });
+      }
+      handleCloseDialog();
+      fetchClients();
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "A apărut o eroare la salvare",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Sigur dorești să ștergi acest client?")) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/clients/${id}`, {
+        method: "DELETE",
+      });
+      toast({
+        title: "Succes",
+        description: "Clientul a fost șters cu succes",
+      });
+      fetchClients();
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "A apărut o eroare la ștergere",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -95,7 +179,7 @@ export default function ClientsPage() {
           </p>
         </div>
         <Button
-          onClick={() => setIsOpen(true)}
+          onClick={() => handleOpenDialog()}
           className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105"
         >
           Adaugă client
@@ -105,7 +189,11 @@ export default function ClientsPage() {
       {/* Main Content Card */}
       <Card className="shadow-sm border-gray-200">
         <CardContent className="p-0">
-          {!hasClients ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4">
+              <p className="text-gray-600">Se încarcă...</p>
+            </div>
+          ) : clients.length === 0 ? (
             // Empty State
             <div className="flex flex-col items-center justify-center py-16 px-4">
               <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
@@ -133,9 +221,6 @@ export default function ClientsPage() {
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Email
                     </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Status
-                    </th>
                     <th className="text-right py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Acțiuni
                     </th>
@@ -151,15 +236,10 @@ export default function ClientsPage() {
                         {client.name}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600">
-                        {client.cui}
+                        {client.taxId || "-"}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600">
-                        {client.email}
-                      </td>
-                      <td className="py-4 px-6 text-sm">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
-                          {client.status}
-                        </span>
+                        {client.email || "-"}
                       </td>
                       <td className="py-4 px-6 text-sm text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -167,6 +247,7 @@ export default function ClientsPage() {
                             variant="ghost"
                             size="sm"
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-all duration-200"
+                            onClick={() => handleOpenDialog(client)}
                           >
                             Editează
                           </Button>
@@ -174,6 +255,7 @@ export default function ClientsPage() {
                             variant="ghost"
                             size="sm"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200"
+                            onClick={() => handleDelete(client.id)}
                           >
                             Șterge
                           </Button>
@@ -188,11 +270,13 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
-      {/* Add Client Dialog */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {/* Add/Edit Client Dialog */}
+      <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Adaugă client nou</DialogTitle>
+            <DialogTitle>
+              {editingClient ? "Editează client" : "Adaugă client nou"}
+            </DialogTitle>
             <DialogDescription>
               Completează informațiile despre client. Toate câmpurile marcate cu * sunt obligatorii.
             </DialogDescription>
@@ -208,6 +292,7 @@ export default function ClientsPage() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Ex: Constructii ABC SRL"
                 required
+                disabled={submitting}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -221,6 +306,7 @@ export default function ClientsPage() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="contact@exemplu.ro"
+                  disabled={submitting}
                 />
               </div>
               <div className="space-y-2">
@@ -233,18 +319,20 @@ export default function ClientsPage() {
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="+40 123 456 789"
+                  disabled={submitting}
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label htmlFor="cui" className="text-sm font-medium text-gray-700">
+              <label htmlFor="taxId" className="text-sm font-medium text-gray-700">
                 CUI / CIF
               </label>
               <Input
-                id="cui"
-                value={formData.cui}
-                onChange={(e) => setFormData({ ...formData, cui: e.target.value })}
+                id="taxId"
+                value={formData.taxId}
+                onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
                 placeholder="RO12345678"
+                disabled={submitting}
               />
             </div>
             <div className="space-y-2">
@@ -257,6 +345,7 @@ export default function ClientsPage() {
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 placeholder="Strada, număr, oraș, județ"
                 rows={3}
+                disabled={submitting}
               />
             </div>
             <div className="space-y-2">
@@ -269,18 +358,20 @@ export default function ClientsPage() {
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="Informații suplimentare despre client"
                 rows={3}
+                disabled={submitting}
               />
             </div>
             <DialogFooter>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsOpen(false)}
+                onClick={handleCloseDialog}
+                disabled={submitting}
               >
                 Anulează
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                Salvează client
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={submitting}>
+                {submitting ? "Se salvează..." : editingClient ? "Actualizează" : "Salvează client"}
               </Button>
             </DialogFooter>
           </form>

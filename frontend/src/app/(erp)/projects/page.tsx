@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -20,64 +21,108 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/api";
 
-// DEMO MODE – Mock data for client demo
-const projects: Array<{
+interface Client {
   id: string;
   name: string;
-  client: string;
-  location: string;
-  period: string;
-  status: string;
-}> = [
-  {
-    id: "1",
-    name: "Bloc rezidential - Sector 1",
-    client: "Constructii ABC SRL",
-    location: "București, Sector 1",
-    period: "01.03.2024 - 30.06.2024",
-    status: "Activ",
-  },
-  {
-    id: "2",
-    name: "Centru comercial - Pipera",
-    client: "Proiecte XYZ SA",
-    location: "București, Pipera",
-    period: "15.04.2024 - 15.08.2024",
-    status: "Activ",
-  },
-  {
-    id: "3",
-    name: "Renovare hotel - centru",
-    client: "Dezvoltare Imobiliara SRL",
-    location: "București, Centru",
-    period: "01.05.2024 - 31.07.2024",
-    status: "Planificat",
-  },
-];
+}
 
-const mockClients = [
-  "Constructii ABC SRL",
-  "Proiecte XYZ SA",
-  "Dezvoltare Imobiliara SRL",
-];
+interface Project {
+  id: string;
+  name: string;
+  clientId: string;
+  code?: string;
+  location?: string;
+  description?: string;
+  client: Client;
+  createdAt: string;
+}
 
 export default function ProjectsPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
-    client: "",
+    clientId: "",
+    code: "",
     location: "",
-    startDate: "",
-    endDate: "",
-    status: "",
+    description: "",
   });
   const { toast } = useToast();
-  const hasProjects = projects.length > 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchProjects();
+    fetchClients();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      const data = await apiRequest<Project[]>("/projects");
+      setProjects(data);
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "Nu s-au putut încărca proiectele",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const data = await apiRequest<Client[]>("/clients");
+      setClients(data);
+    } catch (error: any) {
+      console.error("Failed to fetch clients:", error);
+    }
+  };
+
+  const handleOpenDialog = (project?: Project) => {
+    if (project) {
+      setEditingProject(project);
+      setFormData({
+        name: project.name || "",
+        clientId: project.clientId || "",
+        code: project.code || "",
+        location: project.location || "",
+        description: project.description || "",
+      });
+    } else {
+      setEditingProject(null);
+      setFormData({
+        name: "",
+        clientId: "",
+        code: "",
+        location: "",
+        description: "",
+      });
+    }
+    setIsOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsOpen(false);
+    setEditingProject(null);
+    setFormData({
+      name: "",
+      clientId: "",
+      code: "",
+      location: "",
+      description: "",
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.client) {
+    if (!formData.name.trim() || !formData.clientId) {
       toast({
         title: "Eroare",
         description: "Numele proiectului și clientul sunt obligatorii",
@@ -85,19 +130,62 @@ export default function ProjectsPage() {
       });
       return;
     }
-    toast({
-      title: "Demo Mode",
-      description: "Datele nu sunt salvate. Aceasta este o demonstrație.",
-    });
-    setIsOpen(false);
-    setFormData({
-      name: "",
-      client: "",
-      location: "",
-      startDate: "",
-      endDate: "",
-      status: "",
-    });
+
+    try {
+      setSubmitting(true);
+      if (editingProject) {
+        await apiRequest(`/projects/${editingProject.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(formData),
+        });
+        toast({
+          title: "Succes",
+          description: "Proiectul a fost actualizat cu succes",
+        });
+      } else {
+        await apiRequest("/projects", {
+          method: "POST",
+          body: JSON.stringify(formData),
+        });
+        toast({
+          title: "Succes",
+          description: "Proiectul a fost adăugat cu succes",
+        });
+      }
+      handleCloseDialog();
+      fetchProjects();
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "A apărut o eroare la salvare",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Sigur dorești să ștergi acest proiect?")) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/projects/${id}`, {
+        method: "DELETE",
+      });
+      toast({
+        title: "Succes",
+        description: "Proiectul a fost șters cu succes",
+      });
+      fetchProjects();
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "A apărut o eroare la ștergere",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -111,7 +199,7 @@ export default function ProjectsPage() {
           </p>
         </div>
         <Button
-          onClick={() => setIsOpen(true)}
+          onClick={() => handleOpenDialog()}
           className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105"
         >
           Adaugă proiect
@@ -121,7 +209,11 @@ export default function ProjectsPage() {
       {/* Main Content Card */}
       <Card className="shadow-sm border-gray-200">
         <CardContent className="p-0">
-          {!hasProjects ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4">
+              <p className="text-gray-600">Se încarcă...</p>
+            </div>
+          ) : projects.length === 0 ? (
             // Empty State
             <div className="flex flex-col items-center justify-center py-16 px-4">
               <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
@@ -150,10 +242,7 @@ export default function ProjectsPage() {
                       Locație
                     </th>
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Perioadă
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Status
+                      Cod
                     </th>
                     <th className="text-right py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Acțiuni
@@ -170,22 +259,13 @@ export default function ProjectsPage() {
                         {project.name}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600">
-                        {project.client}
+                        {project.client?.name || "-"}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600">
-                        {project.location}
+                        {project.location || "-"}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600">
-                        {project.period}
-                      </td>
-                      <td className="py-4 px-6 text-sm">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
-                          project.status === "Activ"
-                            ? "bg-blue-100 text-blue-800 border-blue-200"
-                            : "bg-gray-100 text-gray-800 border-gray-200"
-                        }`}>
-                          {project.status}
-                        </span>
+                        {project.code || "-"}
                       </td>
                       <td className="py-4 px-6 text-sm text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -193,6 +273,7 @@ export default function ProjectsPage() {
                             variant="ghost"
                             size="sm"
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-all duration-200"
+                            onClick={() => handleOpenDialog(project)}
                           >
                             Editează
                           </Button>
@@ -200,6 +281,7 @@ export default function ProjectsPage() {
                             variant="ghost"
                             size="sm"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200"
+                            onClick={() => handleDelete(project.id)}
                           >
                             Șterge
                           </Button>
@@ -214,11 +296,13 @@ export default function ProjectsPage() {
         </CardContent>
       </Card>
 
-      {/* Add Project Dialog */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {/* Add/Edit Project Dialog */}
+      <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Adaugă proiect nou</DialogTitle>
+            <DialogTitle>
+              {editingProject ? "Editează proiect" : "Adaugă proiect nou"}
+            </DialogTitle>
             <DialogDescription>
               Completează informațiile despre proiect. Toate câmpurile marcate cu * sunt obligatorii.
             </DialogDescription>
@@ -234,24 +318,41 @@ export default function ProjectsPage() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Ex: Bloc rezidential - Sector 1"
                 required
+                disabled={submitting}
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="client" className="text-sm font-medium text-gray-700">
+              <label htmlFor="clientId" className="text-sm font-medium text-gray-700">
                 Client <span className="text-red-500">*</span>
               </label>
-              <Select value={formData.client} onValueChange={(value) => setFormData({ ...formData, client: value })}>
+              <Select
+                value={formData.clientId}
+                onValueChange={(value) => setFormData({ ...formData, clientId: value })}
+                disabled={submitting}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selectează client" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockClients.map((client) => (
-                    <SelectItem key={client} value={client}>
-                      {client}
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="code" className="text-sm font-medium text-gray-700">
+                Cod proiect
+              </label>
+              <Input
+                id="code"
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                placeholder="Cod unic al proiectului"
+                disabled={submitting}
+              />
             </div>
             <div className="space-y-2">
               <label htmlFor="location" className="text-sm font-medium text-gray-700">
@@ -262,57 +363,33 @@ export default function ProjectsPage() {
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 placeholder="Ex: București, Sector 1"
+                disabled={submitting}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="startDate" className="text-sm font-medium text-gray-700">
-                  Data început
-                </label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="endDate" className="text-sm font-medium text-gray-700">
-                  Data sfârșit
-                </label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                />
-              </div>
-            </div>
             <div className="space-y-2">
-              <label htmlFor="status" className="text-sm font-medium text-gray-700">
-                Status
+              <label htmlFor="description" className="text-sm font-medium text-gray-700">
+                Descriere
               </label>
-              <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selectează status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Planificat">Planificat</SelectItem>
-                  <SelectItem value="În lucru">În lucru</SelectItem>
-                  <SelectItem value="Finalizat">Finalizat</SelectItem>
-                </SelectContent>
-              </Select>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Descriere proiect"
+                rows={3}
+                disabled={submitting}
+              />
             </div>
             <DialogFooter>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsOpen(false)}
+                onClick={handleCloseDialog}
+                disabled={submitting}
               >
                 Anulează
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                Salvează proiect
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={submitting}>
+                {submitting ? "Se salvează..." : editingProject ? "Actualizează" : "Salvează proiect"}
               </Button>
             </DialogFooter>
           </form>

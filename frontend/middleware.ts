@@ -17,16 +17,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // DEMO MODE – Allow all routes (user is always authenticated)
-  // No redirects, no token checks
-  // In production, uncomment the token check below:
-  /*
+  // Check for authentication token
   const accessToken = request.cookies.get("access_token")?.value;
   if (!accessToken && pathname !== "/login") {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
-  */
 
   return NextResponse.next();
 }
