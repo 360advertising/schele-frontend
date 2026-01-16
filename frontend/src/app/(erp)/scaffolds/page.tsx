@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,84 +21,192 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/api";
 
-// DEMO MODE – Mock data for client demo
-const scaffolds: Array<{
+interface Project {
   id: string;
-  code: string;
-  type: string;
-  location: string;
-  status: string;
-  project: string;
-}> = [
-  {
-    id: "1",
-    code: "SCF-001",
-    type: "Standard 2m",
-    location: "București, Sector 1",
-    status: "În utilizare",
-    project: "Bloc rezidential - Sector 1",
-  },
-  {
-    id: "2",
-    code: "SCF-002",
-    type: "Standard 2m",
-    location: "București, Pipera",
-    status: "În utilizare",
-    project: "Centru comercial - Pipera",
-  },
-  {
-    id: "3",
-    code: "SCF-003",
-    type: "Standard 1.5m",
-    location: "Depozit",
-    status: "Disponibilă",
-    project: "-",
-  },
-  {
-    id: "4",
-    code: "SCF-004",
-    type: "Standard 2m",
-    location: "Service",
-    status: "Mentenanță",
-    project: "-",
-  },
-];
+  name: string;
+}
 
-const mockProjects = [
-  "Bloc rezidential - Sector 1",
-  "Centru comercial - Pipera",
-  "Renovare hotel - centru",
-];
+interface Scaffold {
+  id: string;
+  number: string;
+  status: string;
+  currentProjectId?: string;
+  location?: string;
+  notes?: string;
+  currentProject?: Project;
+}
 
 export default function ScaffoldsPage() {
+  const [scaffolds, setScaffolds] = useState<Scaffold[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [editingScaffold, setEditingScaffold] = useState<Scaffold | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
-    type: "",
-    project: "",
-    height: "",
-    area: "",
+    number: "",
+    status: "AVAILABLE",
+    currentProjectId: "",
+    location: "",
     notes: "",
   });
   const { toast } = useToast();
-  const hasScaffolds = scaffolds.length > 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast({
-      title: "Demo Mode",
-      description: "Datele nu sunt salvate. Aceasta este o demonstrație.",
-    });
+  useEffect(() => {
+    fetchScaffolds();
+    fetchProjects();
+  }, []);
+
+  const fetchScaffolds = async () => {
+    try {
+      setLoading(true);
+      const data = await apiRequest<Scaffold[]>("/scaffolds");
+      setScaffolds(data);
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "Nu s-au putut încărca schelele",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const data = await apiRequest<Project[]>("/projects");
+      setProjects(data);
+    } catch (error: any) {
+      console.error("Failed to fetch projects:", error);
+    }
+  };
+
+  const handleOpenDialog = (scaffold?: Scaffold) => {
+    if (scaffold) {
+      setEditingScaffold(scaffold);
+      setFormData({
+        number: scaffold.number || "",
+        status: scaffold.status || "AVAILABLE",
+        currentProjectId: scaffold.currentProjectId || "",
+        location: scaffold.location || "",
+        notes: scaffold.notes || "",
+      });
+    } else {
+      setEditingScaffold(null);
+      setFormData({
+        number: "",
+        status: "AVAILABLE",
+        currentProjectId: "",
+        location: "",
+        notes: "",
+      });
+    }
+    setIsOpen(true);
+  };
+
+  const handleCloseDialog = () => {
     setIsOpen(false);
+    setEditingScaffold(null);
     setFormData({
-      name: "",
-      type: "",
-      project: "",
-      height: "",
-      area: "",
+      number: "",
+      status: "AVAILABLE",
+      currentProjectId: "",
+      location: "",
       notes: "",
     });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.number.trim()) {
+      toast({
+        title: "Eroare",
+        description: "Numărul schelei este obligatoriu",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const payload = {
+        ...formData,
+        currentProjectId: formData.currentProjectId || undefined,
+      };
+      if (editingScaffold) {
+        await apiRequest(`/scaffolds/${editingScaffold.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        toast({
+          title: "Succes",
+          description: "Schela a fost actualizată cu succes",
+        });
+      } else {
+        await apiRequest("/scaffolds", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        toast({
+          title: "Succes",
+          description: "Schela a fost adăugată cu succes",
+        });
+      }
+      handleCloseDialog();
+      fetchScaffolds();
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "A apărut o eroare la salvare",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Sigur dorești să ștergi această schelă?")) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/scaffolds/${id}`, {
+        method: "DELETE",
+      });
+      toast({
+        title: "Succes",
+        description: "Schela a fost ștearsă cu succes",
+      });
+      fetchScaffolds();
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "A apărut o eroare la ștergere",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    const statusMap: Record<string, string> = {
+      AVAILABLE: "Disponibilă",
+      IN_USE: "În utilizare",
+      MAINTENANCE: "Mentenanță",
+      DAMAGED: "Deteriorată",
+    };
+    return statusMap[status] || status;
+  };
+
+  const getStatusColor = (status: string) => {
+    if (status === "AVAILABLE") return "bg-green-100 text-green-800 border-green-200";
+    if (status === "IN_USE") return "bg-blue-100 text-blue-800 border-blue-200";
+    if (status === "MAINTENANCE") return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    if (status === "DAMAGED") return "bg-red-100 text-red-800 border-red-200";
+    return "bg-gray-100 text-gray-800 border-gray-200";
   };
 
   return (
@@ -112,7 +220,7 @@ export default function ScaffoldsPage() {
           </p>
         </div>
         <Button
-          onClick={() => setIsOpen(true)}
+          onClick={() => handleOpenDialog()}
           className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105"
         >
           Adaugă schelă
@@ -122,7 +230,11 @@ export default function ScaffoldsPage() {
       {/* Main Content Card */}
       <Card className="shadow-sm border-gray-200">
         <CardContent className="p-0">
-          {!hasScaffolds ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4">
+              <p className="text-gray-600">Se încarcă...</p>
+            </div>
+          ) : scaffolds.length === 0 ? (
             // Empty State
             <div className="flex flex-col items-center justify-center py-16 px-4">
               <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
@@ -142,10 +254,7 @@ export default function ScaffoldsPage() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Cod schelă
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Tip
+                      Număr schelă
                     </th>
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Locație
@@ -168,31 +277,18 @@ export default function ScaffoldsPage() {
                       className="hover:bg-gray-50 transition-colors duration-200"
                     >
                       <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                        {scaffold.code}
+                        {scaffold.number}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600">
-                        {scaffold.type}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-600">
-                        {scaffold.location}
+                        {scaffold.location || "-"}
                       </td>
                       <td className="py-4 px-6 text-sm">
-                        <span
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
-                            scaffold.status === "Disponibilă"
-                              ? "bg-green-100 text-green-800 border-green-200"
-                              : scaffold.status === "În utilizare"
-                              ? "bg-blue-100 text-blue-800 border-blue-200"
-                              : scaffold.status === "Mentenanță"
-                              ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                              : "bg-gray-100 text-gray-800 border-gray-200"
-                          }`}
-                        >
-                          {scaffold.status}
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(scaffold.status)}`}>
+                          {getStatusLabel(scaffold.status)}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-600">
-                        {scaffold.project || "-"}
+                        {scaffold.currentProject?.name || "-"}
                       </td>
                       <td className="py-4 px-6 text-sm text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -200,6 +296,7 @@ export default function ScaffoldsPage() {
                             variant="ghost"
                             size="sm"
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-all duration-200"
+                            onClick={() => handleOpenDialog(scaffold)}
                           >
                             Editează
                           </Button>
@@ -207,6 +304,7 @@ export default function ScaffoldsPage() {
                             variant="ghost"
                             size="sm"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200"
+                            onClick={() => handleDelete(scaffold.id)}
                           >
                             Șterge
                           </Button>
@@ -221,84 +319,84 @@ export default function ScaffoldsPage() {
         </CardContent>
       </Card>
 
-      {/* Add Scaffold Dialog */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {/* Add/Edit Scaffold Dialog */}
+      <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Adaugă schelă nouă</DialogTitle>
+            <DialogTitle>
+              {editingScaffold ? "Editează schelă" : "Adaugă schelă nouă"}
+            </DialogTitle>
             <DialogDescription>
-              Completează informațiile despre schelă.
+              Completează informațiile despre schelă. Numărul schelei este obligatoriu.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium text-gray-700">
-                Denumire schelă
+              <label htmlFor="number" className="text-sm font-medium text-gray-700">
+                Număr schelă <span className="text-red-500">*</span>
               </label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                id="number"
+                value={formData.number}
+                onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                 placeholder="Ex: SCF-001"
+                required
+                disabled={submitting}
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="type" className="text-sm font-medium text-gray-700">
-                Tip schelă
+              <label htmlFor="status" className="text-sm font-medium text-gray-700">
+                Status
               </label>
-              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+              <Select
+                value={formData.status}
+                onValueChange={(value) => setFormData({ ...formData, status: value })}
+                disabled={submitting}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selectează tip" />
+                  <SelectValue placeholder="Selectează status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Fațadă">Fațadă</SelectItem>
-                  <SelectItem value="Mobilă">Mobilă</SelectItem>
-                  <SelectItem value="Industrială">Industrială</SelectItem>
+                  <SelectItem value="AVAILABLE">Disponibilă</SelectItem>
+                  <SelectItem value="IN_USE">În utilizare</SelectItem>
+                  <SelectItem value="MAINTENANCE">Mentenanță</SelectItem>
+                  <SelectItem value="DAMAGED">Deteriorată</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <label htmlFor="project" className="text-sm font-medium text-gray-700">
+              <label htmlFor="currentProjectId" className="text-sm font-medium text-gray-700">
                 Proiect
               </label>
-              <Select value={formData.project} onValueChange={(value) => setFormData({ ...formData, project: value })}>
+              <Select
+                value={formData.currentProjectId}
+                onValueChange={(value) => setFormData({ ...formData, currentProjectId: value })}
+                disabled={submitting}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selectează proiect" />
+                  <SelectValue placeholder="Selectează proiect (opțional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockProjects.map((project) => (
-                    <SelectItem key={project} value={project}>
-                      {project}
+                  <SelectItem value="">Niciunul</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="height" className="text-sm font-medium text-gray-700">
-                  Înălțime (m)
-                </label>
-                <Input
-                  id="height"
-                  type="number"
-                  value={formData.height}
-                  onChange={(e) => setFormData({ ...formData, height: e.target.value })}
-                  placeholder="Ex: 2.0"
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="area" className="text-sm font-medium text-gray-700">
-                  Suprafață (m²)
-                </label>
-                <Input
-                  id="area"
-                  type="number"
-                  value={formData.area}
-                  onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-                  placeholder="Ex: 50"
-                />
-              </div>
+            <div className="space-y-2">
+              <label htmlFor="location" className="text-sm font-medium text-gray-700">
+                Locație
+              </label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="Ex: București, Sector 1"
+                disabled={submitting}
+              />
             </div>
             <div className="space-y-2">
               <label htmlFor="notes" className="text-sm font-medium text-gray-700">
@@ -310,18 +408,20 @@ export default function ScaffoldsPage() {
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="Informații suplimentare"
                 rows={3}
+                disabled={submitting}
               />
             </div>
             <DialogFooter>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsOpen(false)}
+                onClick={handleCloseDialog}
+                disabled={submitting}
               >
                 Anulează
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                Salvează schela
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={submitting}>
+                {submitting ? "Se salvează..." : editingScaffold ? "Actualizează" : "Salvează schela"}
               </Button>
             </DialogFooter>
           </form>
