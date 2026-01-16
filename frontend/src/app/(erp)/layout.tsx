@@ -28,9 +28,13 @@ export default function ErpLayout({
       {/* Sidebar */}
       <aside className="w-64 bg-slate-800 text-white flex flex-col border-r border-slate-700 shadow-lg">
         <div className="p-6 border-b border-slate-700">
-          <h1 className="text-xl font-semibold text-white tracking-tight">
-            ERP Management Schele
-          </h1>
+          <Link href="/dashboard" className="flex items-center justify-start">
+            <img
+              src="https://www.schela.com/wp-content/uploads/2015/07/logo-schele.gif"
+              alt="Schele Logo"
+              className="h-10 max-h-[40px] w-auto object-contain"
+            />
+          </Link>
         </div>
         <nav className="flex-1 p-4 space-y-2">
           {navLinks.map((link) => {
