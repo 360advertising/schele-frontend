@@ -29,11 +29,13 @@ export default function ErpLayout({
       <aside className="w-64 bg-slate-800 text-white flex flex-col border-r border-slate-700 shadow-lg">
         <div className="p-6 border-b border-slate-700">
           <Link href="/dashboard" className="flex items-center justify-start">
-            <img
-              src="https://www.schela.com/wp-content/uploads/2015/07/logo-schele.gif"
-              alt="Schele Logo"
-              className="h-10 max-h-[40px] w-auto object-contain"
-            />
+            <div className="bg-white rounded-lg p-2">
+              <img
+                src="https://www.schela.com/wp-content/uploads/2015/07/logo-schele.gif"
+                alt="Schele Logo"
+                className="h-10 max-h-[40px] w-auto object-contain"
+              />
+            </div>
           </Link>
         </div>
         <nav className="flex-1 p-4 space-y-2">
