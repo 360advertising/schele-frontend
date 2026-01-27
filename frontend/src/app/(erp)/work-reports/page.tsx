@@ -88,6 +88,23 @@ export default function WorkReportsPage() {
     location: "",
     notes: "",
   });
+  const [formItems, setFormItems] = useState<Array<{
+    id: string;
+    scaffoldComponentId: string;
+    quantity: number;
+    length?: number;
+    weight?: number;
+    unitOfMeasure: string;
+    notes?: string;
+  }>>([]);
+  const [newItemForm, setNewItemForm] = useState({
+    scaffoldComponentId: "",
+    quantity: 0,
+    length: undefined as number | undefined,
+    weight: undefined as number | undefined,
+    unitOfMeasure: "PIECE",
+    notes: "",
+  });
   const [itemFormData, setItemFormData] = useState({
     scaffoldComponentId: "",
     quantity: 0,
@@ -164,6 +181,20 @@ export default function WorkReportsPage() {
         location: report.location || "",
         notes: report.notes || "",
       });
+      // Load existing items if editing
+      if (report.items) {
+        setFormItems(report.items.map(item => ({
+          id: item.id,
+          scaffoldComponentId: item.scaffoldComponentId,
+          quantity: Number(item.quantity) || 0,
+          length: item.length ? Number(item.length) : undefined,
+          weight: item.weight ? Number(item.weight) : undefined,
+          unitOfMeasure: item.unitOfMeasure,
+          notes: item.notes || "",
+        })));
+      } else {
+        setFormItems([]);
+      }
     } else {
       setEditingReport(null);
       setFormData({
@@ -175,7 +206,16 @@ export default function WorkReportsPage() {
         location: "",
         notes: "",
       });
+      setFormItems([]);
     }
+    setNewItemForm({
+      scaffoldComponentId: "",
+      quantity: 0,
+      length: undefined,
+      weight: undefined,
+      unitOfMeasure: "PIECE",
+      notes: "",
+    });
     setIsOpen(true);
   };
 
@@ -191,6 +231,47 @@ export default function WorkReportsPage() {
       location: "",
       notes: "",
     });
+    setFormItems([]);
+    setNewItemForm({
+      scaffoldComponentId: "",
+      quantity: 0,
+      length: undefined,
+      weight: undefined,
+      unitOfMeasure: "PIECE",
+      notes: "",
+    });
+  };
+
+  const handleAddFormItem = () => {
+    if (!newItemForm.scaffoldComponentId || newItemForm.quantity <= 0) {
+      toast({
+        title: "Eroare",
+        description: "Componenta și cantitatea sunt obligatorii",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setFormItems([
+      ...formItems,
+      {
+        id: `temp-${Date.now()}`,
+        ...newItemForm,
+      },
+    ]);
+
+    setNewItemForm({
+      scaffoldComponentId: "",
+      quantity: 0,
+      length: undefined,
+      weight: undefined,
+      unitOfMeasure: "PIECE",
+      notes: "",
+    });
+  };
+
+  const handleRemoveFormItem = (id: string) => {
+    setFormItems(formItems.filter(item => item.id !== id));
   };
 
   const handleOpenItemDialog = (reportId: string, item?: WorkReportItem) => {
@@ -290,20 +371,62 @@ export default function WorkReportsPage() {
         location: formData.location || undefined,
         notes: formData.notes || undefined,
       };
+      
       if (editingReport) {
+        // Update existing report
         await apiRequest(`/work-reports/${editingReport.id}`, {
           method: "PATCH",
           body: JSON.stringify(payload),
         });
+        
+        // Update items - delete all existing and add new ones
+        const existingItems = editingReport.items || [];
+        for (const item of existingItems) {
+          await apiRequest(`/work-reports/${editingReport.id}/items/${item.id}`, {
+            method: "DELETE",
+          });
+        }
+        
+        for (const item of formItems) {
+          await apiRequest(`/work-reports/${editingReport.id}/items`, {
+            method: "POST",
+            body: JSON.stringify({
+              scaffoldComponentId: item.scaffoldComponentId,
+              quantity: item.quantity,
+              length: item.length,
+              weight: item.weight,
+              unitOfMeasure: item.unitOfMeasure,
+              notes: item.notes,
+            }),
+          });
+        }
+        
         toast({
           title: "Succes",
           description: "Procesul verbal a fost actualizat cu succes",
         });
       } else {
-        await apiRequest("/work-reports", {
+        // Create new report
+        const newReport = await apiRequest<WorkReport>("/work-reports", {
           method: "POST",
           body: JSON.stringify(payload),
         });
+        
+        // Add items to the new report
+        for (const item of formItems) {
+          await apiRequest(`/work-reports/${newReport.id}/items`, {
+            method: "POST",
+            body: JSON.stringify({
+              scaffoldComponentId: item.scaffoldComponentId,
+              quantity: item.quantity,
+              length: item.length,
+              weight: item.weight,
+              unitOfMeasure: item.unitOfMeasure,
+              notes: item.notes,
+            }),
+          });
+        }
+        
         toast({
           title: "Succes",
           description: "Procesul verbal a fost creat cu succes",
@@ -781,6 +904,161 @@ export default function WorkReportsPage() {
                 disabled={submitting}
               />
             </div>
+
+            {/* Tabel Componente */}
+            <div className="space-y-4 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700">Componente</h3>
+              </div>
+              
+              {/* Formular adăugare linie nouă */}
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-5">
+                    <Select
+                      value={newItemForm.scaffoldComponentId}
+                      onValueChange={(value) => setNewItemForm({ ...newItemForm, scaffoldComponentId: value })}
+                      disabled={submitting}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selectează componentă" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {components.map((component) => (
+                          <SelectItem key={component.id} value={component.id}>
+                            {component.name} {component.code ? `(${component.code})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder="Bucăți"
+                      value={newItemForm.quantity || ""}
+                      onChange={(e) => setNewItemForm({ ...newItemForm, quantity: parseFloat(e.target.value) || 0 })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Lungime (m)"
+                      value={newItemForm.length || ""}
+                      onChange={(e) => setNewItemForm({ ...newItemForm, length: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Greutate (kg)"
+                      value={newItemForm.weight || ""}
+                      onChange={(e) => setNewItemForm({ ...newItemForm, weight: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Button
+                      type="button"
+                      onClick={handleAddFormItem}
+                      disabled={submitting}
+                      className="w-full"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-5">
+                    <Select
+                      value={newItemForm.unitOfMeasure}
+                      onValueChange={(value) => setNewItemForm({ ...newItemForm, unitOfMeasure: value })}
+                      disabled={submitting}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unitate" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PIECE">Bucată (buc)</SelectItem>
+                        <SelectItem value="METER">Metru (m)</SelectItem>
+                        <SelectItem value="KILOGRAM">Kilogram (kg)</SelectItem>
+                        <SelectItem value="SQUARE_METER">Metru pătrat (m²)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-7">
+                    <Input
+                      type="text"
+                      placeholder="Observații (opțional)"
+                      value={newItemForm.notes || ""}
+                      onChange={(e) => setNewItemForm({ ...newItemForm, notes: e.target.value })}
+                      disabled={submitting}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabel componente adăugate */}
+              {formItems.length > 0 && (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left py-2 px-4 font-semibold text-gray-700">Componentă</th>
+                        <th className="text-right py-2 px-4 font-semibold text-gray-700">Bucăți</th>
+                        <th className="text-right py-2 px-4 font-semibold text-gray-700">Lungime (m)</th>
+                        <th className="text-right py-2 px-4 font-semibold text-gray-700">Greutate (kg)</th>
+                        <th className="text-left py-2 px-4 font-semibold text-gray-700">Unitate</th>
+                        <th className="text-right py-2 px-4 font-semibold text-gray-700">Total</th>
+                        <th className="text-right py-2 px-4 font-semibold text-gray-700">Acțiuni</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {formItems.map((item) => {
+                        const component = components.find(c => c.id === item.scaffoldComponentId);
+                        const total = item.quantity * (item.length || item.weight || 1);
+                        return (
+                          <tr key={item.id} className="hover:bg-gray-50">
+                            <td className="py-2 px-4">
+                              {component?.name || "N/A"}
+                              {component?.code && (
+                                <span className="text-xs text-gray-500 ml-1">({component.code})</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-4 text-right">{item.quantity}</td>
+                            <td className="py-2 px-4 text-right">{item.length || "-"}</td>
+                            <td className="py-2 px-4 text-right">{item.weight || "-"}</td>
+                            <td className="py-2 px-4">{getUnitLabel(item.unitOfMeasure)}</td>
+                            <td className="py-2 px-4 text-right font-medium">{total.toFixed(2)}</td>
+                            <td className="py-2 px-4 text-right">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => handleRemoveFormItem(item.id)}
+                                disabled={submitting}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             <DialogFooter>
               <Button
                 type="button"
