@@ -198,9 +198,9 @@ export default function WorkReportsPage() {
       setEditingItem(item);
       setItemFormData({
         scaffoldComponentId: item.scaffoldComponentId,
-        quantity: typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity.toString()),
-        length: item.length ? (typeof item.length === 'number' ? item.length : parseFloat(item.length.toString())) : undefined,
-        weight: item.weight ? (typeof item.weight === 'number' ? item.weight : parseFloat(item.weight.toString())) : undefined,
+        quantity: Number(item.quantity) || 0,
+        length: item.length ? Number(item.length) : undefined,
+        weight: item.weight ? Number(item.weight) : undefined,
         unitOfMeasure: item.unitOfMeasure,
         notes: item.notes || "",
       });
@@ -491,7 +491,11 @@ export default function WorkReportsPage() {
 
   // Get unique clients from projects
   const clients = Array.from(
-    new Map(projects.map((p) => [p.clientId, (p as any).client]).filter(Boolean)).values()
+    new Map(
+      projects
+        .map((p) => [p.clientId, (p as any).client] as [string, Client])
+        .filter(([, client]) => client != null)
+    ).values()
   ) as Client[];
 
   return (
@@ -1009,13 +1013,13 @@ export default function WorkReportsPage() {
                               )}
                             </td>
                             <td className="py-2 px-4 text-right">
-                              {typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity.toString())}
+                              {Number(item.quantity) || 0}
                             </td>
                             <td className="py-2 px-4 text-right">
-                              {item.length ? (typeof item.length === 'number' ? item.length : parseFloat(item.length.toString())) : "-"}
+                              {item.length ? Number(item.length) : "-"}
                             </td>
                             <td className="py-2 px-4 text-right">
-                              {item.weight ? (typeof item.weight === 'number' ? item.weight : parseFloat(item.weight.toString())) : "-"}
+                              {item.weight ? Number(item.weight) : "-"}
                             </td>
                             <td className="py-2 px-4">{getUnitLabel(item.unitOfMeasure)}</td>
                             {selectedReport.status === "DRAFT" && (

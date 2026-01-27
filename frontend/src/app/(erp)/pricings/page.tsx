@@ -118,7 +118,7 @@ export default function PricingsPage() {
       setFormData({
         projectId: pricing.projectId,
         scaffoldComponentId: pricing.scaffoldComponentId,
-        price: typeof pricing.price === 'number' ? pricing.price : parseFloat(pricing.price.toString()),
+        price: Number(pricing.price) || 0,
         unitOfMeasure: pricing.unitOfMeasure,
         validFrom: pricing.validFrom ? pricing.validFrom.split("T")[0] : new Date().toISOString().split("T")[0],
         validTo: pricing.validTo ? pricing.validTo.split("T")[0] : "",
@@ -341,7 +341,7 @@ export default function PricingsPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
                   {filteredPricings.map((pricing) => {
-                    const price = typeof pricing.price === 'number' ? pricing.price : parseFloat(pricing.price.toString());
+                    const price = Number(pricing.price) || 0;
                     return (
                       <tr
                         key={pricing.id}
