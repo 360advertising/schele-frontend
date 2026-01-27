@@ -31,4 +31,9 @@ export class UpdateWorkReportDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  transportVehicle?: string; // Auto folosit pentru transport
 }

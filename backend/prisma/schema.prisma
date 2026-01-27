@@ -15,6 +15,7 @@ datasource db {
 // ============================================================================
 
 enum WorkType {
+  AVIZ          // AVIZ
   INSTALLATION   // Instalare
   UNINSTALLATION // Dezinstalare
   MODIFICATION   // Modificare
@@ -225,18 +226,19 @@ model ProjectComponentPricing {
 }
 
 model WorkReport {
-  id          String   @id @default(cuid())
-  number      String   @unique // Număr proces verbal
-  clientId    String   // Clientul beneficiar al procesului verbal
-  projectId   String   // Proiectul pentru care se întocmește procesul verbal
-  workType    WorkType // Tip lucrare: instalare, dezinstalare, modificare
-  status      WorkReportStatus @default(DRAFT) // Status proces verbal
-  reportDate  DateTime @default(now()) // Data procesului verbal
-  location    String?  // Locația lucrării (poate diferi de locația proiectului)
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime? // Soft delete
+  id               String   @id @default(cuid())
+  number           String   @unique // Număr proces verbal
+  clientId         String   // Clientul beneficiar al procesului verbal
+  projectId        String   // Proiectul pentru care se întocmește procesul verbal
+  workType         WorkType // Tip lucrare: aviz, instalare, dezinstalare, modificare
+  status           WorkReportStatus @default(DRAFT) // Status proces verbal
+  reportDate       DateTime @default(now()) // Data procesului verbal
+  location         String?  // Locația lucrării (poate diferi de locația proiectului)
+  transportVehicle String?  // Auto folosit pentru transport (ex: Auto ABC-123)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime? // Soft delete
 
   // Relații
   client              Client                @relation(fields: [clientId], references: [id])

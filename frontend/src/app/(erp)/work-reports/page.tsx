@@ -60,6 +60,7 @@ interface WorkReport {
   workType: string;
   reportDate?: string;
   location?: string;
+  transportVehicle?: string;
   notes?: string;
   status: string;
   client?: Client;
@@ -87,6 +88,7 @@ export default function WorkReportsPage() {
     reportDate: new Date().toISOString().split("T")[0],
     location: "",
     notes: "",
+    transportVehicle: "",
   });
   const [formItems, setFormItems] = useState<Array<{
     id: string;
@@ -180,6 +182,7 @@ export default function WorkReportsPage() {
         reportDate: report.reportDate ? report.reportDate.split("T")[0] : new Date().toISOString().split("T")[0],
         location: report.location || "",
         notes: report.notes || "",
+        transportVehicle: (report as any).transportVehicle || "",
       });
       // Load existing items if editing
       if (report.items) {
@@ -205,6 +208,7 @@ export default function WorkReportsPage() {
         reportDate: new Date().toISOString().split("T")[0],
         location: "",
         notes: "",
+        transportVehicle: "",
       });
       setFormItems([]);
     }
@@ -230,6 +234,7 @@ export default function WorkReportsPage() {
       reportDate: new Date().toISOString().split("T")[0],
       location: "",
       notes: "",
+      transportVehicle: "",
     });
     setFormItems([]);
     setNewItemForm({
@@ -319,11 +324,66 @@ export default function WorkReportsPage() {
 
   const getWorkTypeLabel = (workType: string) => {
     const labels: Record<string, string> = {
-      INSTALLATION: "Instalare",
-      UNINSTALLATION: "Dezinstalare",
+      AVIZ: "AVIZ",
+      INSTALLATION: "P.V. Instalare",
+      UNINSTALLATION: "P.V. Dezinstalare",
       MODIFICATION: "Modificare",
     };
     return labels[workType] || workType;
+  };
+
+  // Componente standard din PDF
+  const standardComponents = [
+    "Motor + frana de siguranta",
+    "Platforma",
+    "Cablu electric",
+    "Cablu de otel",
+    "Frana de siguranta",
+    "Contragreutati",
+    "Bare",
+    "Suport pentru contragreutati",
+    "Triunghi",
+    "Panou de comanda",
+  ];
+
+  const handlePreFillStandardComponents = () => {
+    // Găsește sau creează componentele standard
+    const itemsToAdd = standardComponents.map((componentName) => {
+      // Caută componenta în lista existentă
+      let component = components.find(
+        (c) => c.name.toLowerCase() === componentName.toLowerCase()
+      );
+      
+      // Dacă nu există, folosește primul component disponibil sau lasă gol
+      if (!component && components.length > 0) {
+        component = components[0];
+      }
+
+      return {
+        id: `temp-${Date.now()}-${Math.random()}`,
+        scaffoldComponentId: component?.id || "",
+        quantity: 0,
+        length: undefined,
+        weight: undefined,
+        unitOfMeasure: "PIECE",
+        notes: "",
+      };
+    }).filter(item => item.scaffoldComponentId); // Filtrează doar cele care au componentă
+
+    if (itemsToAdd.length === 0) {
+      toast({
+        title: "Informație",
+        description: "Nu există componente în sistem. Adaugă mai întâi componentele în modulul Componente.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setFormItems([...formItems, ...itemsToAdd]);
+    toast({
+      title: "Succes",
+      description: `${itemsToAdd.length} componente standard au fost adăugate`,
+    });
   };
 
   const getStatusLabel = (status: string) => {
@@ -370,6 +430,7 @@ export default function WorkReportsPage() {
         reportDate: formData.reportDate || undefined,
         location: formData.location || undefined,
         notes: formData.notes || undefined,
+        transportVehicle: formData.transportVehicle || undefined,
       };
       
       if (editingReport) {
@@ -860,8 +921,9 @@ export default function WorkReportsPage() {
                     <SelectValue placeholder="Selectează tip" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="INSTALLATION">Instalare</SelectItem>
-                    <SelectItem value="UNINSTALLATION">Dezinstalare</SelectItem>
+                    <SelectItem value="AVIZ">AVIZ</SelectItem>
+                    <SelectItem value="INSTALLATION">P.V. Instalare</SelectItem>
+                    <SelectItem value="UNINSTALLATION">P.V. Dezinstalare</SelectItem>
                     <SelectItem value="MODIFICATION">Modificare</SelectItem>
                   </SelectContent>
                 </Select>
@@ -892,6 +954,19 @@ export default function WorkReportsPage() {
               />
             </div>
             <div className="space-y-2">
+              <label htmlFor="transportVehicle" className="text-sm font-medium text-gray-700">
+                Transport (Auto)
+              </label>
+              <Input
+                id="transportVehicle"
+                value={formData.transportVehicle}
+                onChange={(e) => setFormData({ ...formData, transportVehicle: e.target.value })}
+                placeholder="Ex: Auto ABC-123"
+                disabled={submitting}
+              />
+              <p className="text-xs text-gray-500">Partile componente sunt transportate cu auto</p>
+            </div>
+            <div className="space-y-2">
               <label htmlFor="notes" className="text-sm font-medium text-gray-700">
                 Observații
               </label>
@@ -909,6 +984,16 @@ export default function WorkReportsPage() {
             <div className="space-y-4 border-t pt-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">Componente</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePreFillStandardComponents}
+                  disabled={submitting || components.length === 0}
+                  className="text-xs"
+                >
+                  Precompletează componente standard
+                </Button>
               </div>
               
               {/* Formular adăugare linie nouă */}
