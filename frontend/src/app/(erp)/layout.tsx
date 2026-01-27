@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Home, Users, Folder, Building, FileText, Receipt, LogOut } from "lucide-react";
+import { Home, Users, Folder, Building, FileText, Receipt, FileSignature, Wrench, DollarSign, LogOut } from "lucide-react";
 
 // DEMO MODE – ERP Layout with sidebar and topbar for authenticated pages
 export default function ErpLayout({
@@ -17,8 +17,11 @@ export default function ErpLayout({
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/clients", label: "Clienți", icon: Users },
+    { href: "/contracts", label: "Contracte", icon: FileSignature },
     { href: "/projects", label: "Proiecte", icon: Folder },
     { href: "/scaffolds", label: "Schele", icon: Building },
+    { href: "/components", label: "Componente", icon: Wrench },
+    { href: "/pricings", label: "Tarifare", icon: DollarSign },
     { href: "/work-reports", label: "Procese verbale", icon: FileText },
     { href: "/proformas", label: "Proforme", icon: Receipt },
   ];

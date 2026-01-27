@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, API_BASE_URL } from "@/lib/api";
+import { Download } from "lucide-react";
 
 interface Client {
   id: string;
@@ -180,6 +181,43 @@ export default function ProformasPage() {
     }
   };
 
+  const handleDownloadPdf = async (proformaId: string) => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const response = await fetch(`${API_BASE_URL}/proformas/${proformaId}/pdf`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Eroare la generarea PDF-ului");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const proforma = proformas.find((p) => p.id === proformaId);
+      a.download = `Proforma_${proforma?.number || proformaId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Succes",
+        description: "PDF-ul a fost descărcat cu succes",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Eroare",
+        description: error.message || "A apărut o eroare la descărcarea PDF-ului",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Sigur dorești să ștergi această proformă?")) {
       return;
@@ -290,6 +328,15 @@ export default function ProformasPage() {
                       </td>
                       <td className="py-4 px-6 text-sm text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50 transition-all duration-200"
+                            onClick={() => handleDownloadPdf(proforma.id)}
+                            title="Descarcă PDF"
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

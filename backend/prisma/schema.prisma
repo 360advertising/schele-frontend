@@ -75,6 +75,8 @@ model User {
   updatedAt DateTime @updatedAt
   deletedAt DateTime? // Soft delete
 
+  @@index([email])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -97,6 +99,9 @@ model Client {
   workReports WorkReport[]
   proformaInvoices ProformaInvoice[]
 
+  @@index([deletedAt])
+  @@index([code])
+  @@index([name])
   @@map("clients")
 }
 
@@ -104,8 +109,19 @@ model Contract {
   id          String   @id @default(cuid())
   number      String   @unique // Număr contract
   clientId    String   // Clientul cu care s-a încheiat contractul
-  startDate   DateTime?
-  endDate     DateTime?
+  startDate   DateTime // Data începerii contractului
+  endDate     DateTime? // Data încheierii contractului (opțional)
+  contractDate DateTime @default(now()) // Data semnării contractului
+  location    String?  // Locația unde se execută lucrările
+  description String?  // Descrierea lucrărilor
+  terms       String?  // Termeni și condiții
+  supplierName String  @default("A.D. SCHELE") // Numele furnizorului
+  supplierTaxId String? // CUI/CIF furnizor
+  supplierAddress String? // Adresa furnizorului
+  supplierPhone String? // Telefon furnizor
+  supplierEmail String? // Email furnizor
+  supplierBankAccount String? // Cont bancar furnizor
+  supplierBankName String? // Nume bancă furnizor
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -114,6 +130,9 @@ model Contract {
   // Relații
   client      Client   @relation(fields: [clientId], references: [id])
 
+  @@index([clientId])
+  @@index([deletedAt])
+  @@index([contractDate])
   @@map("contracts")
 }
 
@@ -133,6 +152,9 @@ model Project {
   workReports         WorkReport[]
   componentPricings   ProjectComponentPricing[]
 
+  @@index([clientId])
+  @@index([deletedAt])
+  @@index([code])
   @@map("projects")
 }
 
@@ -169,6 +191,10 @@ model ScaffoldComponent {
   projectPricings  ProjectComponentPricing[]
   workReportItems  WorkReportItem[]
 
+  @@index([deletedAt])
+  @@index([code])
+  @@index([status])
+  @@index([currentProjectId])
   @@map("scaffold_components")
 }
 
@@ -191,6 +217,10 @@ model ProjectComponentPricing {
 
   // Prețurile sunt definite pe proiect + componentă (unicitate)
   @@unique([projectId, scaffoldComponentId, validFrom])
+  @@index([projectId, scaffoldComponentId])
+  @@index([deletedAt])
+  @@index([validFrom])
+  @@index([validTo])
   @@map("project_component_pricings")
 }
 
@@ -216,6 +246,11 @@ model WorkReport {
 
   // Procesul verbal este baza de facturare
   // Procesele verbale facturate (status = BILLED) NU pot fi modificate
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([reportDate])
   @@map("work_reports")
 }
 
@@ -255,6 +290,10 @@ model ProformaInvoice {
   items               ProformaInvoiceItem[]
 
   // O proformă poate include mai multe procese verbale ale aceluiași client
+  @@index([clientId])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([issueDate])
   @@map("proforma_invoices")
 }
 

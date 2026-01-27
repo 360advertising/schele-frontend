@@ -90,7 +90,7 @@ export default function ScaffoldsPage() {
       setFormData({
         number: scaffold.number || "",
         status: scaffold.status || "AVAILABLE",
-        currentProjectId: scaffold.currentProjectId || "",
+        currentProjectId: scaffold.currentProjectId || "none",
         location: scaffold.location || "",
         notes: scaffold.notes || "",
       });
@@ -113,7 +113,7 @@ export default function ScaffoldsPage() {
     setFormData({
       number: "",
       status: "AVAILABLE",
-      currentProjectId: "",
+      currentProjectId: "none",
       location: "",
       notes: "",
     });
@@ -377,7 +377,7 @@ export default function ScaffoldsPage() {
                   <SelectValue placeholder="Selectează proiect (opțional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Niciunul</SelectItem>
+                  <SelectItem value="none">Niciunul</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}

@@ -17,7 +17,8 @@ export async function apiRequest<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const fullUrl = `${API_BASE_URL}${endpoint}`;
+  const response = await fetch(fullUrl, {
     ...options,
     headers,
   });
@@ -32,9 +33,50 @@ export async function apiRequest<T>(
       }
       throw new Error("Unauthorized");
     }
-    const error = await response.json().catch(() => ({ message: "Request failed" }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    
+    // Try to parse JSON error, but handle HTML responses gracefully
+    let errorMessage = `HTTP error! status: ${response.status}`;
+    try {
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const error = await response.json();
+        errorMessage = error.message || error.error || errorMessage;
+      } else {
+        // If it's not JSON, read as text to see what we got
+        const text = await response.text();
+        console.error("Non-JSON error response:", text.substring(0, 200));
+        errorMessage = `Server returned non-JSON response. Status: ${response.status}`;
+      }
+    } catch (parseError) {
+      console.error("Error parsing error response:", parseError);
+      errorMessage = `Request failed with status ${response.status}`;
+    }
+    
+    throw new Error(errorMessage);
   }
 
-  return response.json();
+  // Handle 204 No Content and 304 Not Modified responses (no body)
+  const responseStatus = response.status;
+  if (responseStatus === 204 || responseStatus === 304) {
+    return null as T;
+  }
+
+  // Check if response has content before parsing
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    return null as T;
+  }
+
+  try {
+    const text = await response.text();
+    
+    if (!text || text.trim().length === 0) {
+      return null as T;
+    }
+    
+    return JSON.parse(text) as T;
+  } catch (parseError: any) {
+    console.error('Failed to parse JSON response:', parseError);
+    return null as T;
+  }
 }
