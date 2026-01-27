@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -91,6 +92,17 @@ export default function LoginPage() {
             >
               {isLoading ? "Se autentifică..." : "Autentificare"}
             </Button>
+            <div className="text-center mt-4">
+              <p className="text-sm text-gray-600">
+                Nu ai cont?{" "}
+                <Link
+                  href="/register"
+                  className="text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Creează cont
+                </Link>
+              </p>
+            </div>
           </form>
         </CardContent>
       </Card>
